@@ -30,7 +30,7 @@
 ## 安装和使用
 
 ```bash
-git clone <这个仓库的地址>
+git clone https://github.com/zhaoxianglong666/claude-desktop-pet.git
 ```
 
 - **双击 `启动桌宠.vbs`**：小克马上出现。

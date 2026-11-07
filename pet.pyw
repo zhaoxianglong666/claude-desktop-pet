@@ -213,6 +213,7 @@ TYPING = ['这个 bug 交给我！', '又写了一行～', '编译通过啦！',
 TYPE_HELLO = ['你好呀～在问什么呢？', '嗨！我在听～', '又来找 Claude 聊天啦', '想到什么好问题了？',
               '慢慢打，我等你～']
 TYPE_HELLO_CODE = ['要写代码啦？我准备好了！', '嗨～这次要做什么？', '你说，我来敲！', '新需求来啦？']
+DAZE = ['（发呆中…）', '让代码飞一会儿～', '盯——', '放空一下脑袋']
 TYPE_WAKE = ['嗯？你在打字…早呀～', '啊！我醒了我醒了', '你好呀，刚眯了一会儿～']
 READING = ['嗯…原来如此', '这本书好有意思', '翻页翻页～', '学到了学到了']
 
@@ -289,6 +290,27 @@ def classify(urls):
     return 'code'   # 没有 claude.ai 网页、只有本地界面 = Code 标签页
 
 
+def parse_usage(text):
+    """把“用量：5 小时限额的 72%23:50 重置”这类文字拆成 [(名称, 百分比, 重置时间)]"""
+    import re
+    found = []
+    for seg in text.split(';;'):
+        m = re.search(r'(\d+)\s*%', seg)
+        if not m:
+            continue
+        low = seg.lower()
+        if '周' in seg or 'week' in low:
+            name = '每周限额'
+        elif '小时' in seg or 'hour' in low:
+            h = re.search(r'(\d+)\s*(小时|-?\s*hour)', seg, re.I)
+            name = '%s 小时限额' % (h.group(1) if h else '5')
+        else:
+            name = '限额'
+        reset = seg[m.end():].strip(' ：:，,')
+        found.append((name, int(m.group(1)), reset))
+    return found
+
+
 class ClaudeWatch:
     """后台线程：每 1.5 秒看一眼 Claude 是关着、在前台用 Code、在前台用 Chat，还是在后台"""
 
@@ -299,6 +321,8 @@ class ClaudeWatch:
         self.main = None        # Claude 主窗口句柄
         self.box_rel = None     # 输入框相对 Claude 窗口左上角的位置 (dx, dy, w, h)
         self.fg_claude = False  # Claude 是否在前台
+        self.usage = []         # [(名称, 百分比, 重置时间)]，Claude 输入框旁的“用量”按钮
+        self.usage_at = 0       # 上次读到用量的时间
         threading.Thread(target=self.run, daemon=True).start()
 
     @staticmethod
@@ -347,7 +371,13 @@ class ClaudeWatch:
                     elif fg in wins or root in wins:
                         fgc = True
                         res = self.probe(self.main)
-                        urls, _, box = res.partition(' || ')
+                        parts = res.split(' || ')
+                        urls = parts[0]
+                        box = parts[1] if len(parts) > 1 else ''
+                        if len(parts) > 2 and urls != 'err':
+                            self.usage = parse_usage(parts[2])
+                            if self.usage:
+                                self.usage_at = time.time()
                         if urls != self.last_urls:
                             log('Claude 页面: ' + (urls or '(无)'))
                             self.last_urls = urls
@@ -426,6 +456,8 @@ class Pet:
         self.owner = None
         self.last_key = 0
         self.last_greet = 0
+        self.usage_lvl = {}
+        self.next_usage = time.time() + 60   # 第一次读到用量后大约 1 分钟报一次
         self.flip = -1
         self.next_flip = 100
         self.new_code()
@@ -547,8 +579,12 @@ class Pet:
 
     def choose_next(self):
         mode = self.watch.mode
-        if mode == 'code':
-            self.set_state('typing')
+        if mode == 'code':                      # Code 时：主要敲代码，也爱发呆和思考
+            st = random.choices(('typing', 'thinking', 'idle'), (6, 2, 2))[0]
+            dur = {'typing': (400, 900), 'thinking': (120, 240), 'idle': (160, 320)}[st]
+            self.set_state(st, random.randint(*dur))
+            if st == 'idle' and random.random() < 0.4:
+                self.say(random.choice(DAZE), 3)
         elif mode == 'chat':
             self.set_state('reading')
         else:
@@ -721,6 +757,41 @@ class Pet:
                                        vy=-0.5, life=30, text=random.choice(GLYPHS),
                                        color=random.choice(GLYPH_COLORS)))
 
+    def usage_text(self):
+        lines = []
+        for name, pct, reset in self.watch.usage:
+            s = '%s已用 %d%%' % (name, pct)
+            if reset:
+                s += '，%s' % reset
+            if pct >= 90:
+                s = '注意！' + s
+            lines.append(s)
+        return '\n'.join(lines)
+
+    def check_usage(self, now):
+        """时不时告诉你 5 小时限额 / 每周限额用了多少；越过 50/75/90/100% 时马上提醒"""
+        u = self.watch.usage
+        if not u or now - self.watch.usage_at > 120 or self.watch.mode not in ('code', 'chat'):
+            return
+        urgent = False
+        for name, pct, _ in u:
+            lvl = max([t for t in (50, 75, 90, 100) if pct >= t], default=0)
+            if lvl > self.usage_lvl.get(name, lvl):
+                urgent = True
+            self.usage_lvl[name] = lvl
+        if urgent or now >= self.next_usage:
+            self.next_usage = now + random.uniform(15, 25) * 60
+            self.say(self.usage_text(), 7)
+            self.hop = [-1, -2, -2, -1, 0]
+
+    def ask_usage(self):
+        if self.state == 'hidden':
+            return
+        if self.watch.usage and time.time() - self.watch.usage_at < 600:
+            self.say(self.usage_text(), 7)
+        else:
+            self.say('Claude 输入框旁边现在没显示用量，应该还挺充足～', 4)
+
     def check_typing(self):
         """你在 Claude 里一开始打字，小克就跟你打招呼"""
         if not self.watch.fg_claude or self.state in ('hidden', 'enter', 'exit'):
@@ -770,7 +841,14 @@ class Pet:
         want = {'code': 'typing', 'chat': 'reading'}.get(mode)
         if want and idle > cfg['sleep_after_min'] * 60:
             want = 'sleep'                      # 人走开了，小克也打个盹
-        if want:
+        self.check_usage(now)
+        if want == 'typing':                    # Code 时敲代码 / 发呆 / 思考轮着来
+            if self.state not in ('typing', 'thinking', 'idle'):
+                if self.state == 'sleep':
+                    self.set_state('wake', 25)
+                else:
+                    self.choose_next()
+        elif want:
             if self.state != want:
                 if self.state == 'sleep' and want != 'sleep':
                     self.set_state('wake', 25)  # 先醒一下，醒完 choose_next 会切到 want
@@ -1061,6 +1139,7 @@ class Pet:
         m.add_cascade(label='大小', menu=sm)
         self.auto_var = tk.BooleanVar(value=os.path.exists(STARTUP_VBS))
         m.add_checkbutton(label='跟着 Claude 自动出现（开机自启）', variable=self.auto_var, command=self.toggle_auto)
+        m.add_command(label='问问限额', command=self.ask_usage)
         m.add_command(label='回到麦克风上面', command=self.go_home)
         m.add_separator()
         m.add_command(label='躲起来（1 小时内不打扰）', command=lambda: self.leave(3600))

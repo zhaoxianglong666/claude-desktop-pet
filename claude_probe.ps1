@@ -1,5 +1,7 @@
 ﻿# Xiaoke probe: given a window handle, print the page URLs shown in the Claude window and the
-# position of the chat input box, via UI Automation. Output: "<urls> || <x>,<y>,<w>,<h>"
+# position of the chat input box, and the usage-limit text, via UI Automation.
+# Output: "<urls> || <x>,<y>,<w>,<h>[,<micX>,<micW>] || <usage texts>"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $A = [System.Windows.Automation.AutomationElement]
 $CT = [System.Windows.Automation.ControlType]
@@ -11,6 +13,7 @@ $scope = [System.Windows.Automation.TreeScope]::Descendants
 while (($line = [Console]::In.ReadLine()) -ne $null) {
     $out = @()
     $box = ''
+    $usage = @()
     try {
         $w = $A::FromHandle([IntPtr][long]$line)
         foreach ($d in $w.FindAll($scope, $docCond)) {
@@ -20,6 +23,12 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             $r = $d.Current.BoundingRectangle
             if ($r.Width -lt 50 -or $r.Height -lt 50) { continue }
             $out += ('{0:0}x{1:0} {2}' -f $r.Width, $r.Height, $v.Split('?')[0])
+        }
+        $btns = $w.FindAll($scope, $btnCond)
+        # usage-limit indicators, e.g. "用量：5 小时限额的 72%23:50 重置"
+        foreach ($b in $btns) {
+            $n = $b.Current.Name
+            if ($n -match '^\s*(用量|(?i)usage)\s*[:：]|限额的?\s*\d+\s*%') { $usage += ($n -replace '\s*\|\s*', ' ') }
         }
         $best = $null
         foreach ($e in $w.FindAll($scope, $editCond)) {
@@ -31,7 +40,7 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
         if ($best -ne $null) {
             $box = '{0:0},{1:0},{2:0},{3:0}' -f $best.X, $best.Y, $best.Width, $best.Height
             # microphone button on the same row as the input box
-            foreach ($b in $w.FindAll($scope, $btnCond)) {
+            foreach ($b in $btns) {
                 $n = $b.Current.Name
                 if ($b.Current.IsOffscreen -or $n -notmatch '录音|语音|麦克风|听写|(?i)microphone|dictat|voice|record') { continue }
                 $r = $b.Current.BoundingRectangle
@@ -41,6 +50,6 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
             }
         }
     } catch { $out = @('err') }
-    [Console]::Out.WriteLine(($out -join ' | ') + ' || ' + $box)
+    [Console]::Out.WriteLine(($out -join ' | ') + ' || ' + $box + ' || ' + ($usage -join ' ;; '))
     [Console]::Out.Flush()
 }

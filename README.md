@@ -11,13 +11,15 @@
 | 你在做什么 | 小克在做什么 |
 |---|---|
 | 打开 Claude | 从输入框里蹦出来打招呼 |
-| 在 Claude 里用 **Code** | 敲代码（笔记本 + 迷你终端） |
+| 在 Claude 里用 **Code** | 主要在敲代码（笔记本 + 迷你终端），也会时不时发呆、思考 |
 | 在 Claude 里用 **Chat** | 看书、翻页 |
 | 在 Claude 里**开始打字** | 蹦一下跟你打招呼（睡着的话会被叫醒） |
 | 关掉 Claude | 说声“下班咯”，跳回输入框消失 |
 | 其他时候 | 大部分时间在睡觉，每隔 3～7 分钟起来活动一下 |
 
-另外：在 Code/Chat 里 5 分钟没动键盘鼠标它会打盹；连续工作 50 分钟会提醒你休息。
+另外：
+- 每隔 15～25 分钟报一次 Claude 的 **5 小时限额 / 每周限额**用了多少、什么时候重置；用量越过 50%、75%、90%、100% 时马上提醒。右键“问问限额”可以随时问。（读的是 Claude 输入框旁边的“用量”按钮，Claude 没显示时它也不会报。）
+- 在 Code/Chat 里 5 分钟没动键盘鼠标它会打盹；连续工作 50 分钟会提醒你休息。
 
 ## 要求
 
@@ -51,7 +53,7 @@ git clone https://github.com/zhaoxianglong666/claude-desktop-pet.git
 
 ## 它是怎么知道你在干什么的
 
-- `claude_probe.ps1` 用 Windows 自带的 UI Automation 读取 Claude 窗口当前页面的**地址**（`claude.ai/chat/…` 是 Chat，`claude.ai/epitaxy/…` 是 Code）以及输入框和麦克风按钮的**位置**，不读任何对话内容。
+- `claude_probe.ps1` 用 Windows 自带的 UI Automation 读取 Claude 窗口当前页面的**地址**（`claude.ai/chat/…` 是 Chat，`claude.ai/epitaxy/…` 是 Code）、输入框和麦克风按钮的**位置**，以及“用量”按钮上的**限额文字**，不读任何对话内容。
 - “你开始打字”只检测有没有按键被按下，不记录按了什么。
 - 运行日志写在 `pet.log`，只记录页面地址和模式切换，方便排查。
 

@@ -457,7 +457,7 @@ class Pet:
         self.last_key = 0
         self.last_greet = 0
         self.usage_lvl = {}
-        self.next_usage = time.time() + 60   # 第一次读到用量后大约 1 分钟报一次
+        self.poke_usage_at = 0     # 上次戳它报额度的时间
         self.flip = -1
         self.next_flip = 100
         self.new_code()
@@ -769,7 +769,7 @@ class Pet:
         return '\n'.join(lines)
 
     def check_usage(self, now):
-        """时不时告诉你 5 小时限额 / 每周限额用了多少；越过 50/75/90/100% 时马上提醒"""
+        """用量越过 50/75/90/100% 时主动提醒（平时要戳它才报）"""
         u = self.watch.usage
         if not u or now - self.watch.usage_at > 120 or self.watch.mode not in ('code', 'chat'):
             return
@@ -779,8 +779,7 @@ class Pet:
             if lvl > self.usage_lvl.get(name, lvl):
                 urgent = True
             self.usage_lvl[name] = lvl
-        if urgent or now >= self.next_usage:
-            self.next_usage = now + random.uniform(15, 25) * 60
+        if urgent:                              # 平时戳它才报额度，只有越过 50/75/90/100% 才主动提醒
             self.say(self.usage_text(), 7)
             self.hop = [-1, -2, -2, -1, 0]
 
@@ -1110,10 +1109,14 @@ class Pet:
         self.hop = [-1, -2, -3, -3, -2, -1, 0]
         self.particles.append(dict(x=OX + random.uniform(5, 12), y=OY - 1, vx=random.uniform(-0.1, 0.1),
                                    vy=-0.45, life=25, text='♥', color='#e0565b'))
+        now = time.time()
         if self.state == 'sleep':
             self.auto_sleep = False
             self.set_state('wake', 40)
-        else:
+        if now - self.poke_usage_at >= 180:     # 3 分钟内第一次戳：告诉你额度；之后再戳就正常撒娇
+            self.poke_usage_at = now
+            self.ask_usage()
+        elif self.state != 'wake':
             self.say(random.choice(POKE), 3)
 
     def do(self, st):

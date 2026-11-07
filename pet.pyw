@@ -307,7 +307,8 @@ def parse_usage(text):
         else:
             name = '限额'
         reset = seg[m.end():].strip(' ：:，,')
-        found.append((name, int(m.group(1)), reset))
+        if name not in [f[0] for f in found]:   # 同一种限额只报一次
+            found.append((name, int(m.group(1)), reset))
     return found
 
 

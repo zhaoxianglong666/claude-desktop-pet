@@ -28,7 +28,9 @@ while (($line = [Console]::In.ReadLine()) -ne $null) {
         # usage-limit indicators, e.g. "用量：5 小时限额的 72%23:50 重置"
         foreach ($b in $btns) {
             $n = $b.Current.Name
-            if ($n -match '^\s*(用量|(?i)usage)\s*[:：]|限额的?\s*\d+\s*%') { $usage += ($n -replace '\s*\|\s*', ' ') }
+            # only the real usage button: name starts with "用量：" / "Usage:" and is short
+            # (chat messages that merely quote this text must not match)
+            if ($n.Length -lt 80 -and $n -match '^\s*(用量|(?i)usage)\s*[:：]') { $usage += ($n -replace '\s*\|\s*', ' ') }
         }
         $best = $null
         foreach ($e in $w.FindAll($scope, $editCond)) {

@@ -41,6 +41,8 @@ git clone https://github.com/zhaoxianglong666/claude-desktop-pet.git
 
 勾上“跟着 Claude 自动出现”后，小克会在开机时悄悄启动，等你打开 Claude 才出来。
 
+**挪动文件夹**：先右键小克选“退出”，把整个文件夹挪到新位置，再双击一次 `启动桌宠.vbs`，开机自启就会自动改成新位置。
+
 ## 自定义
 
 第一次运行会生成 `config.json`，可以改：

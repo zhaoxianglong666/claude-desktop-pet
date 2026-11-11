@@ -406,6 +406,12 @@ class ClaudeWatch:
 class Pet:
     def __init__(self, show_now):
         self.cfg = load_cfg()
+        # 文件夹被挪到别处后，开机自启里记的还是旧路径：每次启动时顺手改成现在的位置
+        if self.cfg.get('autostart') or os.path.exists(STARTUP_VBS):
+            try:
+                set_autostart(True)
+            except Exception:
+                log('autostart refresh error: ' + traceback.format_exc())
         self.inbox = queue.Queue()
         r = self.root = tk.Tk()
         r.title('小克')
